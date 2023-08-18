@@ -1,13 +1,30 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
-    background: #000;
+  background: #000;
+}
+
+.container {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  top: 50%;
+  left: 50%;
+  font-size: 1.2rem;
+  color: #fff;
 }
 
 canvas {
-    position: absolute;
-    border: 3px solid #fff;
-    width: 800px;
-    height: 700px;
-    transform: translate(-50%, -50%);
-    top: 50%;
-    left: 50%;
+  position: relative;
+  width: 1000px;
+  height: 700px;
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
+p {
+  margin: 0;
 }
