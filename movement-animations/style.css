@@ -1,0 +1,11 @@
+* {
+  box-sizing: border-box;
+}
+
+canvas {
+  border: 3px solid black;
+  display: block;
+  margin: 0 auto;
+  height: 1000px;
+  width: 500px;
+}
