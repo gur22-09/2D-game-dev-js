@@ -9,3 +9,14 @@ canvas {
   height: 1000px;
   width: 500px;
 }
+
+
+select,
+option {
+  font-size: 25px;
+}
+
+.controls {
+  position: absolute;
+  top: 10px;
+}
