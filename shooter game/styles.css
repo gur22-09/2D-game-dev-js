@@ -3,7 +3,6 @@ body {
   height: 100vh;
   overflow: hidden; 
   cursor: pointer;
-  background: linear-gradient(to bottom, red, green, blue); 
 }
 
 canvas {

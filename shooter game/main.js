@@ -18,10 +18,19 @@ const enemyInterval = 500;
 const bgImage = new Image();
 bgImage.src = "./assets/background.png";
 
+const explosionWaW = new Audio("./assets/explosion.wav");
+explosionWaW.preload = "auto"; // preloading before to avoid any initial delay
+
 let gameScore = 0;
 let isGameOver = false;
 
 const floor = (n) => Math.floor(n);
+
+let ravens = [];
+let explosions = [];
+let particles = [];
+let prevStamp = 0;
+let timeToNextRaven = 0;
 
 class Raven {
   constructor(imgSrc) {
@@ -46,6 +55,7 @@ class Raven {
       floor(Math.random() * 255),
     ];
     this.color = `rgb(${this.colorArr[0]}, ${this.colorArr[1]}, ${this.colorArr[2]})`;
+    this.hasTrail = Math.random() > 0.5;
   }
 
   update(deltaTime) {
@@ -62,8 +72,18 @@ class Raven {
 
     if (this.lastFlapTime > this.flapInterval) {
       if (this.frame >= this.maxFrame) this.frame = 0;
-      else this.frame++;
-      this.lastFlapTime = 0;
+      else {
+        this.frame++;
+        this.lastFlapTime = 0;
+
+        if (this.hasTrail) {
+          for (let i = 0; i < 5; i++) {
+            particles.push(
+              new Particles(this.x, this.y, this.width, this.color)
+            );
+          }
+        }
+      }
     }
 
     let [speedX, speedY] = this.speed;
@@ -89,31 +109,35 @@ class Raven {
 }
 
 class Explosion {
-  constructor(x, y, size, imgSrc, soundSrc) {
+  constructor(x, y, size, imgSrc, audio) {
     this.spriteWidth = 200;
     this.spriteHeight = 179;
     this.maxFrame = 5;
     this.x = x;
     this.y = y;
     this.size = size;
+    this.audio = audio;
     this.image = new Image();
     this.image.src = imgSrc;
-    this.audio = new Audio(soundSrc);
     this.timeSinceLastFrame = 0;
-    this.frameInterval = 100;
+    this.frameInterval = 200;
     this.frame = 0;
     this.destroy = false;
+    this.isAudioPlayed = false;
   }
 
   update(deltaTime) {
-    if (this.frame === 0) this.audio.play();
+    if (!this.isAudioPlayed) {
+      this.audio.play();
+      this.isAudioPlayed = true;
+    }
 
     this.timeSinceLastFrame += deltaTime;
 
     if (this.timeSinceLastFrame > this.frameInterval) {
       this.frame++;
       this.timeSinceLastFrame = 0;
-      // if (this.frame >= this.maxFrame) this.destroy = true;
+      if (this.frame >= this.maxFrame) this.destroy = true;
     }
   }
 
@@ -132,10 +156,37 @@ class Explosion {
   }
 }
 
-let ravens = [];
-let explosions = [];
-let prevStamp = 0;
-let timeToNextRaven = 0;
+class Particles {
+  constructor(x, y, size, color) {
+    this.size = size;
+    this.x = x + this.size * 0.5;
+    this.y = y + this.size * 0.33;
+    this.radius = Math.random() * this.size * 0.1;
+    this.maxRadius = Math.random() * 20 + 35;
+    this.destroy = false;
+    this.speedX = Math.random() * 1 + 0.5;
+    this.color = color;
+  }
+
+  update() {
+    this.x += this.speedX;
+    this.radius += 0.5;
+
+    if (this.radius > this.maxRadius) {
+      this.destroy = true;
+    }
+  }
+
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = 1 - this.radius / this.maxRadius;
+    ctx.beginPath();
+    ctx.fillStyle = this.color;
+    ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+  }
+}
 
 /**
  *
@@ -162,20 +213,15 @@ function animate(timeStamp) {
     timeToNextRaven = 0;
   }
 
-  
-
-  ravens.forEach((r) => {
-    r.update(deltaTime);
-    r.draw();
-  });
-  explosions.forEach((e) => {
-    e.update(deltaTime);
+  [...particles, ...ravens, ...explosions].forEach((e) => {
     e.draw();
+    e.update(deltaTime);
   });
 
   ravens = ravens.filter((r) => !r.destroy);
   explosions = explosions.filter((e) => !e.destroy);
-  
+  particles = particles.filter((p) => !p.destroy);
+
   drawShadowText(`Score : ${gameScore}`, 50, 75);
 
   if (!isGameOver) {
@@ -184,7 +230,6 @@ function animate(timeStamp) {
     handleGameOver();
   }
 }
-
 
 function handleGameOver() {
   drawShadowText(
@@ -205,9 +250,9 @@ function drawGameOver() {
 }
 
 function drawShadowText(text, x, y, isCenter = false) {
-  if(isCenter) {
+  if (isCenter) {
     ctx.textAlign = "center";
-  }else {
+  } else {
     ctx.textAlign = "left";
   }
 
@@ -246,7 +291,7 @@ window.addEventListener("click", (e) => {
           raven.y,
           raven.width,
           "./assets/boom.png",
-          "./assets/explosion.wav"
+          explosionWaW
         )
       );
     }
