@@ -164,7 +164,7 @@ function animate() {
     enemy.update();
     enemy.draw();
   });
-  console.log(enemies[0]);
+ 
   gameFrame++;
   requestAnimationFrame(animate);
 }
