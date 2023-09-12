@@ -178,16 +178,6 @@ window.addEventListener("load", () => {
      * @param {CanvasRenderingContext2D} ctx
      */
     draw(ctx) {
-      ctx.strokeStyle = "#000";
-      ctx.beginPath();
-      ctx.arc(
-        this.x + this.width / 2,
-        this.y + this.height / 2,
-        this.width / 2,
-        0,
-        Math.PI * 2
-      );
-      ctx.stroke();
       ctx.drawImage(
         this.playerImg,
         this.width * this.frameX,
@@ -205,8 +195,11 @@ window.addEventListener("load", () => {
      *
      * @param {InputHandler} input
      * @param {number} deltaTime
+     * @param {Enemy[]} enemies
      */
-    update(input, deltaTime) {
+    update(input, deltaTime, enemies) {
+      checkCollision(this, enemies);
+
       if (this.frameTimer > this.frameInterval) {
         this.frameX = (this.frameX + 1) % this.maxFrame;
         this.frameTimer = 0;
@@ -256,7 +249,7 @@ window.addEventListener("load", () => {
 
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance < enemy.width / 2 + this.width / 2) {
+      if (distance + 15 < enemy.width / 2 + this.width / 2 )  {
         isGameOver = true;
       }
     }
@@ -286,19 +279,9 @@ window.addEventListener("load", () => {
      * @param {CanvasRenderingContext2D} ctx
      */
     draw(ctx) {
-      ctx.strokeStyle = "#000";
-      ctx.beginPath();
-      ctx.arc(
-        this.x + this.width / 2,
-        this.y + this.width / 2,
-        this.width / 2,
-        0,
-        Math.PI * 2
-      );
-      ctx.stroke();
-      ctx.strokeStyle = "blue";
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.width / 2, 0, Math.PI * 2);
+      // ctx.strokeStyle = "white";
+      // ctx.beginPath();
+      // ctx.arc(this.x + this.width / 2 , this.y + this.height / 2, this.width / 2 - 20, 0, 2 * Math.PI);
       ctx.stroke();
       ctx.drawImage(
         this.img,
@@ -461,8 +444,7 @@ window.addEventListener("load", () => {
     });
 
     player.draw(ctx);
-    player.update(inputHandler, deltaTime);
-    checkCollision(player, enemies);
+    player.update(inputHandler, deltaTime, enemies);
 
     addEnemies(enemies, deltaTime, assets.enemy);
 
