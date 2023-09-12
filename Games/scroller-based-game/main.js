@@ -3,11 +3,11 @@
 // 2.
 
 /**
- * Represents a 2D point.
+ * Represents draw params.
  * @typedef {Object} TextDrawParams
  * @property {number} x - The x-coordinate of the point.
  * @property {number} y - The y-coordinate of the point.
- * @property {string} fillStyle
+ * @property {boolean=} isAlignCenter
  * @property {string} text
  */
 
@@ -68,7 +68,13 @@ function getBoundedRandom(base, spread) {
  * @param {TextDrawParams} drawParams
  */
 function drawShadowText(ctx, drawParams) {
-  const { fillStyle, text, x, y } = drawParams;
+  const { text, x, y, isAlignCenter = false } = drawParams;
+  if (isAlignCenter) {
+    ctx.textAlign = "center";
+  } else {
+    ctx.textAlign = "left";
+  }
+
   ctx.fillStyle = "#000";
   ctx.font = `40px Helvetica`;
   ctx.fillText(text, x, y);
@@ -89,6 +95,7 @@ window.addEventListener("load", () => {
   const enemyInterval = 2000;
   let randomEnemyInterval = getBoundedRandom(1000, 500);
   let gameScore = 0;
+  let isGameOver = false;
 
   // Input Handler
   class InputHandler {
@@ -171,6 +178,16 @@ window.addEventListener("load", () => {
      * @param {CanvasRenderingContext2D} ctx
      */
     draw(ctx) {
+      ctx.strokeStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(
+        this.x + this.width / 2,
+        this.y + this.height / 2,
+        this.width / 2,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
       ctx.drawImage(
         this.playerImg,
         this.width * this.frameX,
@@ -228,6 +245,21 @@ window.addEventListener("load", () => {
     isOnGround() {
       return this.y >= this.gameHeight - this.height;
     }
+
+    /**
+     *
+     * @param {Enemy} enemy
+     */
+    collidesWith(enemy) {
+      const dx = (enemy.x + enemy.width / 2) - (this.x + this.width / 2);
+      const dy = (enemy.y + enemy.height / 2) - (this.y + this.height / 2);
+
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < enemy.width / 2 + this.width / 2) {
+        isGameOver = true;
+      }
+    }
   }
 
   // Enemy Class
@@ -254,6 +286,20 @@ window.addEventListener("load", () => {
      * @param {CanvasRenderingContext2D} ctx
      */
     draw(ctx) {
+      ctx.strokeStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(
+        this.x + this.width / 2,
+        this.y + this.width / 2,
+        this.width / 2,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
+      ctx.strokeStyle = "blue";
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.width / 2, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.drawImage(
         this.img,
         this.frameX * this.width,
@@ -375,6 +421,19 @@ window.addEventListener("load", () => {
 
   /**
    *
+   * @param {Player} player
+   * @param {Enemy[]} enemies
+   */
+  function checkCollision(player, enemies) {
+    for (const enemy of enemies) {
+      if (player.collidesWith(enemy)) {
+        gameOver = true;
+      }
+    }
+  }
+
+  /**
+   *
    * @param {CanvasRenderingContext2D} ctx
    * @param {Player} player
    * @param {Enemy[]} enemies
@@ -403,6 +462,7 @@ window.addEventListener("load", () => {
 
     player.draw(ctx);
     player.update(inputHandler, deltaTime);
+    checkCollision(player, enemies);
 
     addEnemies(enemies, deltaTime, assets.enemy);
 
@@ -412,14 +472,24 @@ window.addEventListener("load", () => {
       e.draw(ctx);
       e.update(deltaTime);
     });
+
     drawShadowText(ctx, {
-      fillStyle: "#000",
       text: `Score: ${gameScore}`,
       x: 20,
       y: 50,
     });
-    requestAnimationFrame((stamp) =>
-      animate(ctx, player, enemies, backgrounds, inputHandler, assets, stamp)
-    );
+
+    if (!isGameOver) {
+      requestAnimationFrame((stamp) =>
+        animate(ctx, player, enemies, backgrounds, inputHandler, assets, stamp)
+      );
+    } else {
+      drawShadowText(ctx, {
+        text: `Game Over!`,
+        x: CANVAS_WIDTH / 2,
+        y: CANVAS_HEIGHT / 2,
+        isAlignCenter: true,
+      });
+    }
   }
 });
