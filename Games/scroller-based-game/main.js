@@ -1,33 +1,79 @@
-console.log("linked");
-
 // todo
 // 1. move classes outside
 // 2.
 
 /**
+ * Represents a 2D point.
+ * @typedef {Object} TextDrawParams
+ * @property {number} x - The x-coordinate of the point.
+ * @property {number} y - The y-coordinate of the point.
+ * @property {string} fillStyle
+ * @property {string} text
+ */
+
+/**
  *
- * @param {string[]} nameArr
+ * @param {["background", "enemy", "player"]} nameArr
  * @param {string} path
  * @param {Function} callback
+ * @returns {Promise<Record<"background" | "enemy" | "player", string>>}
  */
-function loadImageAssets(nameArr, path, callback) {
-  let count = nameArr.length;
-  let results = {};
+async function loadImageAssets(nameArr, path) {
+  return new Promise((resolve, reject) => {
+    if (!nameArr || !path) {
+      reject("missing arguments");
+    }
+    let count = nameArr.length;
+    let results = {};
 
-  for (let name of nameArr) {
-    const img = new Image();
-    img.src = `${path}/${name}.png`;
+    for (let name of nameArr) {
+      const img = new Image();
+      img.src = `${path}/${name}.png`;
 
-    results[name] = img;
+      results[name] = img;
 
-    img.onload = () => {
-      if (--count === 0) {
-        callback(results);
-      }
-    };
-  }
+      img.onload = () => {
+        if (--count === 0) {
+          resolve(results);
+        }
+      };
+    }
+  });
+}
 
-  return results;
+/**
+ *
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ * @returns
+ */
+function clamp(value, min, max) {
+  return Math.max(Math.min(value, max), min);
+}
+
+/**
+ *
+ * @param {number} base
+ * @param {number} spread
+ * @returns
+ */
+function getBoundedRandom(base, spread) {
+  return Math.random() * base + spread;
+}
+
+/**
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {TextDrawParams} drawParams
+ */
+function drawShadowText(ctx, drawParams) {
+  const { fillStyle, text, x, y } = drawParams;
+  ctx.fillStyle = "#000";
+  ctx.font = `40px Helvetica`;
+  ctx.fillText(text, x, y);
+  ctx.fillStyle = "#fff";
+  ctx.fillText(text, x + 2, y + 2);
 }
 
 window.addEventListener("load", () => {
@@ -36,6 +82,13 @@ window.addEventListener("load", () => {
 
   const CANVAS_WIDTH = (canvas.width = 1080);
   const CANVAS_HEIGHT = (canvas.height = 720);
+
+  const enemies = [];
+  let prevTimeStamp = 0;
+  let enemyTimer = 0;
+  const enemyInterval = 2000;
+  let randomEnemyInterval = getBoundedRandom(1000, 500);
+  let gameScore = 0;
 
   // Input Handler
   class InputHandler {
@@ -50,12 +103,8 @@ window.addEventListener("load", () => {
           case "ArrowRight": {
             if (this.#keys.includes(e.key)) return;
             this.#keys.push(e.key);
-            console.log(this.#keys);
+            // console.log(this.#keys);
             break;
-          }
-
-          case "Enter": {
-            console.log("Enter Pressed");
           }
 
           default:
@@ -73,18 +122,18 @@ window.addEventListener("load", () => {
             if (index === -1) return;
 
             this.#keys.splice(index, 1);
-            console.log(this.#keys);
+            // console.log(this.#keys);
             break;
-          }
-
-          case "Enter": {
-            console.log("Enter Pressed");
           }
 
           default:
             break;
         }
       });
+    }
+
+    get keys() {
+      return this.#keys;
     }
   }
 
@@ -99,11 +148,22 @@ window.addEventListener("load", () => {
     constructor(gameWidth, gameHeight, playerImg) {
       this.gameWidth = gameWidth;
       this.gameHeight = gameHeight;
+      this.width = 200;
+      this.height = 200;
       this.x = 0;
-      this.y = 0;
-      this.spriteWidth = 200;
-      this.spriteHeight = 200;
+      this.y = this.gameHeight - this.height;
       this.playerImg = playerImg;
+      this.frameX = 0;
+      this.runningFrames = 8;
+      this.jumpFrames = 5;
+      this.maxFrame = this.runningFrames;
+      this.fps = 20;
+      this.frameTimer = 0;
+      this.frameInterval = 1000 / this.fps; // time take to render 1 frame in milli seconds
+      this.frameY = 0;
+      this.speedX = 0;
+      this.speedY = 0;
+      this.gravity = 1;
     }
 
     /**
@@ -111,25 +171,191 @@ window.addEventListener("load", () => {
      * @param {CanvasRenderingContext2D} ctx
      */
     draw(ctx) {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(this.x, this.y, this.spriteWidth, this.spriteHeight);
-      ctx.drawImage(this.playerImg, 0, 0);
+      ctx.drawImage(
+        this.playerImg,
+        this.width * this.frameX,
+        this.height * this.frameY,
+        this.width,
+        this.height,
+        this.x,
+        this.y,
+        this.width,
+        this.height
+      );
     }
 
-    update() {
-      this.x++;
+    /**
+     *
+     * @param {InputHandler} input
+     * @param {number} deltaTime
+     */
+    update(input, deltaTime) {
+      if (this.frameTimer > this.frameInterval) {
+        this.frameX = (this.frameX + 1) % this.maxFrame;
+        this.frameTimer = 0;
+      } else {
+        this.frameTimer += deltaTime;
+      }
+
+      if (input.keys.includes("ArrowRight")) {
+        this.speedX = 5;
+      } else if (input.keys.includes("ArrowLeft")) {
+        this.speedX = -5;
+      } else if (input.keys.includes("ArrowUp") && this.isOnGround()) {
+        // isOnGround to keep only sinlge jump, remove it to allow multiple jumps
+        this.speedY = -30;
+      } else {
+        this.speedX = 0;
+      }
+
+      this.x += this.speedX;
+      this.y += this.speedY;
+
+      if (!this.isOnGround()) {
+        this.speedY += this.gravity;
+        this.maxFrame = this.jumpFrames;
+        this.frameY = 1;
+      } else {
+        this.maxFrame = this.runningFrames;
+        this.speedY = 0;
+        this.frameY = 0;
+      }
+
+      this.x = clamp(this.x, 0, this.gameWidth - this.width);
+      this.y = clamp(this.y, 0, this.gameHeight - this.height);
+    }
+
+    isOnGround() {
+      return this.y >= this.gameHeight - this.height;
     }
   }
 
   // Enemy Class
+  class Enemy {
+    constructor(gameWidth, gameHeight, enemyImg) {
+      this.gameWidth = gameWidth;
+      this.gameHeight = gameHeight;
+      this.width = 160;
+      this.height = 119;
+      this.x = this.gameWidth;
+      this.y = this.gameHeight - this.height;
+      this.img = enemyImg;
+      this.frameX = 0;
+      this.speedX = 8;
+      this.maxFrame = 5;
+      this.fps = 20;
+      this.frameTimer = 0;
+      this.frameInterval = 1000 / this.fps; // time take to render 1 frame in milli seconds
+      this.destroy = false;
+    }
+
+    /**
+     *
+     * @param {CanvasRenderingContext2D} ctx
+     */
+    draw(ctx) {
+      ctx.drawImage(
+        this.img,
+        this.frameX * this.width,
+        0,
+        this.width,
+        this.height,
+        this.x,
+        this.y,
+        this.width,
+        this.height
+      );
+    }
+
+    /**
+     *
+     * @param {number} deltaTime // in milli seconds
+     */
+    update(deltaTime) {
+      if (this.frameTimer > this.frameInterval) {
+        this.frameX = (this.frameX + 1) % this.maxFrame;
+        this.frameTimer = 0;
+      } else {
+        this.frameTimer += deltaTime;
+      }
+      this.x -= this.speedX;
+
+      if (this.x < 0 - this.width) {
+        this.destroy = true;
+        gameScore++;
+      }
+    }
+  }
 
   // Backgrounds
+  class Background {
+    /**
+     *
+     * @param {number} gameWidth
+     * @param {number} gameHeight
+     * @param {number} width
+     * @param {number} height
+     * @param {HTMLImageElement} bgImg
+     */
+    constructor(gameWidth, gameHeight, bgImg) {
+      this.gameWidth = gameWidth;
+      this.gameHeight = gameHeight;
+      this.img = bgImg;
+      this.x = 0;
+      this.y = 0;
+      this.width = 2400;
+      this.height = 720;
+      this.speed = 7;
+    }
 
-  loadImageAssets(["background", "enemy", "player"], "./assets", runGame);
+    /**
+     *
+     * @param {CanvasRenderingContext2D} ctx
+     */
+    draw(ctx) {
+      ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+      ctx.drawImage(
+        this.img,
+        this.x + this.width,
+        this.y,
+        this.width,
+        this.height
+      );
+    }
+
+    update() {
+      this.x -= this.speed;
+      if (this.x <= -this.width) {
+        this.x = 0;
+      }
+    }
+  }
+
+  loadImageAssets(["background", "enemy", "player"], "./assets")
+    .then((res) => {
+      runGame(res);
+    })
+    .catch((err) => console.error(err));
 
   /**
    *
-   * @param {Record<string, HTMLImageElement>} assets
+   * @param {Enemy[]} enemies
+   * @param {number} deltaTime
+   */
+  function addEnemies(enemies, deltaTime, enemyImg) {
+    if (enemyTimer > enemyInterval + randomEnemyInterval) {
+      enemies.push(new Enemy(CANVAS_WIDTH, CANVAS_HEIGHT, enemyImg));
+      // reset timer
+      enemyTimer = 0;
+      randomEnemyInterval = getBoundedRandom(1000, 500);
+    } else {
+      enemyTimer += deltaTime;
+    }
+  }
+
+  /**
+   *
+   * @param {Record<"background" | "enemy" | "player", HTMLImageElement>} assets
    */
   function runGame(assets) {
     const playerImg = assets.player;
@@ -138,15 +364,62 @@ window.addEventListener("load", () => {
 
     const inputHandler = new InputHandler();
     const player = new Player(CANVAS_WIDTH, CANVAS_HEIGHT, playerImg);
+    const backgrounds = [
+      new Background(CANVAS_WIDTH, CANVAS_HEIGHT, backgroundImg),
+    ];
 
-    animate(ctx, player);
+    enemies.push(new Enemy(CANVAS_WIDTH, CANVAS_HEIGHT, enemyImg));
+
+    animate(ctx, player, enemies, backgrounds, inputHandler, assets, 0);
   }
 
-  function animate(ctx, player) {
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    player.draw(ctx);
-    player.update();
+  /**
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Player} player
+   * @param {Enemy[]} enemies
+   * @param {Background[]} backgrounds
+   * @param {InputHandler} inputHandler
+   * @param {Record<"background" | "enemy" | "player", HTMLImageElement>} assets
+   * @param {number} timeStamp
+   */
+  function animate(
+    ctx,
+    player,
+    enemies,
+    backgrounds,
+    inputHandler,
+    assets,
+    timeStamp
+  ) {
+    const deltaTime = (timeStamp ?? 0) - prevTimeStamp;
+    prevTimeStamp = timeStamp;
 
-    requestAnimationFrame(() => animate(ctx, player));
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    backgrounds.forEach((b) => {
+      b.draw(ctx);
+      // b.update();
+    });
+
+    player.draw(ctx);
+    player.update(inputHandler, deltaTime);
+
+    addEnemies(enemies, deltaTime, assets.enemy);
+
+    enemies = enemies.filter((e) => !e.destroy);
+
+    enemies.forEach((e) => {
+      e.draw(ctx);
+      e.update(deltaTime);
+    });
+    drawShadowText(ctx, {
+      fillStyle: "#000",
+      text: `Score: ${gameScore}`,
+      x: 20,
+      y: 50,
+    });
+    requestAnimationFrame((stamp) =>
+      animate(ctx, player, enemies, backgrounds, inputHandler, assets, stamp)
+    );
   }
 });
