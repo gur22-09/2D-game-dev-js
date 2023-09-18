@@ -9,16 +9,16 @@
 
 class Game {
   /**
-   * 
-   * @param {number} gameWidth 
-   * @param {number} gameHeight 
-   * @param {Enemy[]} enemies 
+   *
+   * @param {number} gameWidth
+   * @param {number} gameHeight
+   * @param {Enemy[]} enemies
    */
   constructor(ctx, gameWidth, gameHeight, enemies) {
-    this.ctx = ctx
+    this.ctx = ctx;
     this.gameWidth = gameWidth;
     this.gameHeight = gameHeight;
-    this.enemies = enemies
+    this.enemies = enemies;
     this.assets = null;
   }
 
@@ -31,11 +31,11 @@ class Game {
 
   /**
    *
-   * @param {Record<"background" | "enemy" | "player", HTMLImageElement>} assets
+   *
    * @param {Function} animate
    */
   runGame(animate) {
-    if(this.assets === null) return;
+    if (this.assets === null) return;
 
     const playerImg = this.assets.player;
     const enemyImg = this.assets.enemy;
@@ -43,11 +43,25 @@ class Game {
 
     const inputHandler = new InputHandler();
     const player = new Player(this.gameWidth, this.gameHeight, playerImg);
-    const backgrounds = [new Background(this.gameWidth, this.gameHeight, backgroundImg)];
+    const backgrounds = [
+      new Background(this.gameWidth, this.gameHeight, backgroundImg),
+    ];
 
     this.enemies.push(new Enemy(this.gameWidth, this.gameHeight, enemyImg));
 
-    animate(this.ctx, player, this.enemies, backgrounds, inputHandler, this.assets, 0);
+    animate(
+      this.ctx,
+      player,
+      this.enemies,
+      backgrounds,
+      inputHandler,
+      this.assets,
+      0
+    );
+  }
+
+  reset() {
+    this.enemies = [];
   }
 }
 
@@ -84,6 +98,9 @@ class AssetManager {
 
 class InputHandler {
   #keys = [];
+  #touchEvents = [];
+  touchThreshold = 30;
+  pageY = 0;
 
   constructor() {
     window.addEventListener("keydown", (e) => {
@@ -121,10 +138,37 @@ class InputHandler {
           break;
       }
     });
+
+    window.addEventListener("touchstart", (e) => {
+      this.pageY = e.touches[0].pageY;
+    });
+
+    window.addEventListener("touchmove", (e) => {
+      const swipeDistance = e.touches[0].pageY - this.pageY;
+      if (
+        swipeDistance < -this.touchThreshold &&
+        !this.#touchEvents.includes("SwipeUp")
+      ) {
+        this.#touchEvents.push("SwipeUp");
+      } else if (
+        swipeDistance > this.touchThreshold &&
+        !this.#touchEvents.includes("SwipeDown")
+      ) {
+        this.#touchEvents.push("SwipeDown");
+      }
+    });
+
+    window.addEventListener("touchend", () => {
+      this.#touchEvents.length = 0;
+    });
   }
 
   get keys() {
     return this.#keys;
+  }
+
+  get touchEvents() {
+    return this.#touchEvents;
   }
 }
 
@@ -195,7 +239,11 @@ class Player {
       this.speedX = 5;
     } else if (input.keys.includes("ArrowLeft")) {
       this.speedX = -5;
-    } else if (input.keys.includes("ArrowUp") && this.isOnGround()) {
+    } else if (
+      (input.keys.includes("ArrowUp") ||
+        input.touchEvents.includes("SwipeUp")) &&
+      this.isOnGround()
+    ) {
       // isOnGround to keep only sinlge jump, remove it to allow multiple jumps
       this.speedY = -30;
     } else {
@@ -434,11 +482,12 @@ window.addEventListener("load", () => {
   const canvas = document.getElementById("c");
   const ctx = canvas.getContext("2d");
   const retryBtn = document.getElementById("reset");
+  const fullScreenBtn = document.getElementById("fullScreenToggle");
 
   const CANVAS_WIDTH = (canvas.width = 1080);
   const CANVAS_HEIGHT = (canvas.height = 720);
 
-  const enemies = [];
+  let enemies = [];
   let prevTimeStamp = 0;
   let enemyTimer = 0;
   const enemyInterval = 2000;
@@ -488,7 +537,7 @@ window.addEventListener("load", () => {
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     backgrounds.forEach((b) => {
       b.draw(ctx);
-      // b.update();
+      b.update();
     });
 
     player.draw(ctx);
@@ -517,7 +566,7 @@ window.addEventListener("load", () => {
       );
     } else {
       drawShadowText(ctx, {
-        text: `Game Over!`,
+        text: `Game Over! Press Enter to restart`,
         x: CANVAS_WIDTH / 2,
         y: CANVAS_HEIGHT / 2,
         isAlignCenter: true,
@@ -533,6 +582,21 @@ window.addEventListener("load", () => {
   function reset() {
     isGameOver = false;
     gameScore = 0;
+    enemies = [];
+    game.reset();
+  }
+
+  function retryGame() {
+    reset();
+    game.runGame(animate);
+  }
+
+  function toggleFullScreen() {
+    if(!document.fullscreenElement) {
+      canvas.requestFullscreen().catch(e => alert(`FullScreen failed ${e.message}`))
+    }else {
+      document.exitFullscreen();
+    }
   }
 
   async function startGame() {
@@ -543,8 +607,20 @@ window.addEventListener("load", () => {
   startGame();
 
   retryBtn.addEventListener("click", () => {
-    reset();
-    game.runGame(animate);
+    retryGame();
     retryBtn.style.opacity = 0;
+  });
+
+  fullScreenBtn.addEventListener("click", () => {
+    toggleFullScreen();
+  })
+
+  window.addEventListener("keypress", (e) => {
+    switch (e.key) {
+      case "Enter":
+        if (!isGameOver) return;
+        retryBtn.style.opacity = 0;
+        retryGame();
+    }
   });
 });
